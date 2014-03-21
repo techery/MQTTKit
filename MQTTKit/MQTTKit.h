@@ -43,9 +43,7 @@ typedef void (^MQTTDisconnectionHandler)(NSUInteger code);
 
 @class MQTTClient;
 
-@interface MQTTClient : NSObject {
-    struct mosquitto *mosq;
-}
+@interface MQTTClient : NSObject
 
 @property (readwrite, copy) NSString *clientID;
 @property (readwrite, copy) NSString *host;
@@ -59,9 +57,6 @@ typedef void (^MQTTDisconnectionHandler)(NSUInteger code);
 @property (readwrite, assign) BOOL cleanSession;
 @property (nonatomic, copy) MQTTMessageHandler messageHandler;
 @property (nonatomic, copy) MQTTDisconnectionHandler disconnectionHandler;
-
-+ (void) initialize;
-+ (NSString*) version;
 
 - (MQTTClient*) initWithClientId: (NSString *)clientId;
 - (void) setMessageRetry: (NSUInteger)seconds;

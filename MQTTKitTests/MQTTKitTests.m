@@ -82,12 +82,13 @@ NSString *topic;
     client.host = @"this.is.not.a.mqtt.server";
 
     [client connectWithCompletionHandler:^(MQTTConnectionReturnCode code) {
+        NSLog(@"code = %lu", code);
         if (code == ConnectionRefusedServerUnavailable) {
             dispatch_semaphore_signal(connectError);
         }
     }];
 
-    XCTAssertFalse(gotSignal(connectError, 4));
+    XCTAssertTrue(gotSignal(connectError, 4));
 }
 
 - (void)testConnectDisconnect
