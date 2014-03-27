@@ -233,8 +233,13 @@ dispatch_queue_t queue;
 }
 
 - (void) disconnectWithCompletionHandler:(MQTTDisconnectionHandler)completionHandler {
+    LogDebug(@"create DISCONNECT message");
+    [self send:[MQTTCommand disconnect]];
+
+    [self.socket disconnectAfterWriting];
+
     if (completionHandler) {
-        self.disconnectionHandler = completionHandler;
+        completionHandler(0);
     }
 //    mosquitto_disconnect(mosq);
 }
@@ -324,6 +329,22 @@ dispatch_queue_t queue;
     }
 }
 
+- (void)handleCommand:(MQTTCommand *)command {
+    switch (command.type) {
+        case MQTTConnack: {
+            UInt8 code[1];
+            [command.data getBytes:&code range:NSMakeRange(1, 1)];
+            if (self.connectionCompletionHandler) {
+                self.connectionCompletionHandler(code[0]);
+            }
+            break;
+        }
+        default:
+            NSLog(@"unhandled type: %i", command.type);
+            break;
+    }
+}
+
 - (void)readFrame {
 	[[self socket] readDataToData:[GCDAsyncSocket ZeroData] withTimeout:-1 tag:0];
 }
@@ -333,7 +354,44 @@ dispatch_queue_t queue;
 - (void)socket:(GCDAsyncSocket *)sock
    didReadData:(NSData *)data
        withTag:(long)tag {
-    LogDebug(@"read data %@", data);
+    UInt8 header[1];
+    [data getBytes:&header length:1];
+
+    UInt8 type = (header[0] >> 4) & 0x0f;
+    BOOL duplicated = ((header[0] & 0x08) == 0x08);
+    // XXX qos > 2
+    UInt8 qos = (header[0] >> 1) & 0x03;
+    BOOL retained = ((header[0] & 0x01) == 0x01);
+
+    /*
+     multiplier = 1
+     value = 0
+     do
+     digit = 'next digit from stream'
+     value += (digit AND 127) * multiplier
+     multiplier *= 128
+     while ((digit AND 128) != 0)
+     */
+
+    int n = 0;
+    int length = 0;
+    int lengthMultiplier = 1;
+    UInt8 digit[1];
+    
+    do {
+        n++;
+        [data getBytes:&digit range:NSMakeRange(n, 1)];
+        length += (digit[0] & 127) * lengthMultiplier;
+        lengthMultiplier *= 128;
+    } while ((digit[0] & 128) != 0);
+    
+    NSLog(@"length = %i", length);
+    MQTTCommand *command = [[MQTTCommand alloc] initWithType:type dupFlag:duplicated qos:qos retainFlag:retained];
+    if (length > 0) {
+        command.data = [data subdataWithRange:NSMakeRange(n, length)];
+    }
+    [self handleCommand:command];
+    NSLog(@"command = %@", command);
 }
 
 - (void)socket:(GCDAsyncSocket *)sock didReadPartialDataOfLength:(NSUInteger)partialLength tag:(long)tag {
@@ -362,10 +420,42 @@ dispatch_queue_t queue;
 #pragma mark - Private Methods
     
 - (void)send:(MQTTCommand *)command {
+    NSLog(@"command=%@", command);
     if ([self.socket isDisconnected]) {
+        NSLog(@"nothing");
         return;
     }
-    [self.socket writeData:command.data withTimeout:kDefaultTimeout tag:123];
+    
+    NSMutableData *buffer = [[NSMutableData alloc] init] ;
+    // encode fixed header
+    UInt8 header = command.type << 4;
+    if (command.dupFlag) {
+        header |= 0x08;
+    }
+    header |= command.qos << 1;
+    if (command.retainFlag) {
+        header |= 0x01;
+    }
+    [buffer appendBytes:&header length:1];
+    
+    // encode remaining length
+    NSUInteger length = command.data.length;
+    do {
+        UInt8 digit = length % 128;
+        length /= 128;
+        if (length > 0) {
+            digit |= 0x80;
+        }
+        [buffer appendBytes:&digit length:1];
+    }
+    while (length > 0);
+    
+    // encode message data
+    if (command.data) {
+        [buffer appendData:command.data];
+    }
+    
+    [self.socket writeData:buffer withTimeout:kDefaultTimeout tag:123];
 }
 
 

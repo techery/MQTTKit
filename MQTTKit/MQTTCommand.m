@@ -33,11 +33,13 @@
 - (MQTTCommand *)initWithType:(MQTTCommandType )type
                        NSData:(NSData *)data {
     if ((self = [super init])) {
+        self.type = type;
+        self.data = data;
     }
     return self;
 }
 
-+ (id)connectMessageWithClientID:(NSString *)clientID
++ (MQTTCommand *)connectMessageWithClientID:(NSString *)clientID
                         userName:(NSString *)userName
                         password:(NSString *)password
                        keepAlive:(NSInteger)keepAlive
@@ -89,6 +91,10 @@
     return command;
 }
 
++ (MQTTCommand *)disconnect {
+    return [[MQTTCommand alloc] initWithType:MQTTDisconnect NSData:nil];
+}
+
 + (void)appendTo:(NSMutableData *)data byte:(UInt8)byte {
     [data appendBytes:&byte length:1];
 }
@@ -106,5 +112,14 @@
     buf[1] = strLen % 256;
     [data appendBytes:buf length:2];
     [data appendBytes:utf8String length:strLen];
+}
+
+- (NSString *)description {
+    return [NSString stringWithFormat:@"MQTTCommand<type=%i, duplicated=%i, qos=%i, retained=%i, data.length=%lu",
+            self.type,
+            self.dupFlag,
+            self.qos,
+            self.retainFlag,
+            self.data.length];
 }
 @end

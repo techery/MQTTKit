@@ -32,7 +32,7 @@ typedef enum MQTTCommandType : UInt8 {
 @property (readwrite, assign) BOOL dupFlag;
 @property (readwrite, assign) UInt8 qos;
 @property (readwrite, assign) BOOL retainFlag;
-@property (readwrite, assign) NSData *data;
+@property (readwrite, copy) NSData *data;
 
 - (MQTTCommand *)initWithType:(MQTTCommandType )type
                       dupFlag:(BOOL)dupFlag
@@ -41,12 +41,13 @@ typedef enum MQTTCommandType : UInt8 {
 - (MQTTCommand *)initWithType:(MQTTCommandType )type
                        NSData:(NSData *)data;
 
-+ (id)connectMessageWithClientID:(NSString *)clientID
++ (MQTTCommand *)connectMessageWithClientID:(NSString *)clientID
                         userName:(NSString *)userName
                         password:(NSString *)password
                        keepAlive:(NSInteger)keepAlive
                     cleanSession:(BOOL)cleanSessionFlag
                      willMessage:(MQTTMessage *)willMessage
                          willQoS:(UInt8)willQoS;
++ (MQTTCommand *)disconnect;
 
 @end
