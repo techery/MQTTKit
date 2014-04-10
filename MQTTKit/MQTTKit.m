@@ -69,17 +69,20 @@
 
 @end
 
-@implementation MQTTClient
+@implementation MQTTClient {
 
-// dispatch queue to run the mosquitto_loop_forever.
-dispatch_queue_t queue;
+    // dispatch queue to run the mosquitto_loop_forever.
+    dispatch_queue_t queue;
+}
+
+@synthesize cleanSession;
 
 #pragma mark - mosquitto callback methods
 
 static void on_connect(struct mosquitto *mosq, void *obj, int rc)
 {
     MQTTClient* client = (__bridge MQTTClient*)obj;
-    LogDebug(@"on_connect rc = %d", rc);
+    LogDebug(@"[%@] on_connect rc = %d", client.clientID, rc);
     client.connected = YES;
     if (client.connectionCompletionHandler) {
         client.connectionCompletionHandler(rc);
@@ -89,7 +92,7 @@ static void on_connect(struct mosquitto *mosq, void *obj, int rc)
 static void on_disconnect(struct mosquitto *mosq, void *obj, int rc)
 {
     MQTTClient* client = (__bridge MQTTClient*)obj;
-    LogDebug(@"on_disconnect rc = %d", rc);
+    LogDebug(@"[%@] on_disconnect rc = %d", client.clientID, rc);
     client.connected = NO;
     if (client.disconnectionHandler) {
         client.disconnectionHandler(rc);
@@ -121,8 +124,8 @@ static void on_message(struct mosquitto *mosq, void *obj, const struct mosquitto
                                                           qos:mosq_msg->qos
                                                        retain:mosq_msg->retain
                                                           mid:mosq_msg->mid];
-    LogDebug(@"on message %@", message);
     MQTTClient* client = (__bridge MQTTClient*)obj;
+    LogDebug(@"[%@] on message %@", client.clientID, message);
     if (client.messageHandler) {
         client.messageHandler(message);
     }
@@ -166,12 +169,18 @@ static void on_unsubscribe(struct mosquitto *mosq, void *obj, int message_id)
     return [NSString stringWithFormat:@"%d.%d.%d", major, minor, revision];
 }
 
-- (MQTTClient*) initWithClientId: (NSString*) clientId {
+- (MQTTClient*) initWithClientID: (NSString*)clientID {
+    return [self initWithClientID:clientID cleanSession:YES];
+}
+
+- (MQTTClient*) initWithClientID: (NSString*) clientID
+                    cleanSession: (BOOL)aCleanSession
+{
     if ((self = [super init])) {
-        self.clientID = clientId;
+        self.clientID = clientID;
         self.port = 1883;
         self.keepAlive = 60;
-        self.cleanSession = YES;  //NOTE: this isdisable clean to keep the broker remember this client
+        cleanSession = aCleanSession;
         self.reconnectDelay = 1;
         self.reconnectDelayMax = 1;
         self.reconnectExponentialBackoff = NO;
@@ -191,6 +200,7 @@ static void on_unsubscribe(struct mosquitto *mosq, void *obj, int message_id)
         mosquitto_unsubscribe_callback_set(mosq, on_unsubscribe);
 
         queue = dispatch_queue_create(cstrClientId, NULL);
+        LogDebug(@"created queue %@ for client %@", queue, self.clientID);
     }
     return self;
 }
@@ -214,23 +224,23 @@ static void on_unsubscribe(struct mosquitto *mosq, void *obj, int message_id)
 
     const char *cstrHost = [self.host cStringUsingEncoding:NSASCIIStringEncoding];
     const char *cstrUsername = NULL, *cstrPassword = NULL;
-    
+
     if (self.username)
         cstrUsername = [self.username cStringUsingEncoding:NSUTF8StringEncoding];
-    
+
     if (self.password)
         cstrPassword = [self.password cStringUsingEncoding:NSUTF8StringEncoding];
-    
+
     // FIXME: check for errors
     mosquitto_username_pw_set(mosq, cstrUsername, cstrPassword);
     mosquitto_reconnect_delay_set(mosq, self.reconnectDelay, self.reconnectDelayMax, self.reconnectExponentialBackoff);
 
     mosquitto_connect(mosq, cstrHost, self.port, self.keepAlive);
-    
+
     dispatch_async(queue, ^{
-        LogDebug(@"start mosquitto loop");
+        LogDebug(@"[%@] start mosquitto loop", self.clientID);
         mosquitto_loop_forever(mosq, 10, 1);
-        LogDebug(@"end mosquitto loop");
+        LogDebug(@"[%@] end mosquitto loop", self.clientID);
     });
 
     self.connected = YES;
