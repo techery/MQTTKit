@@ -8,13 +8,12 @@ Pod::Spec.new do |s|
   s.author       = { "Jeff Mesnil" => "jmesnil@gmail.com" }
   s.ios.platform = :ios, '5.0'
   s.osx.platform = :osx, '10.9'
-  s.source       = { :git => "https://github.com/jmesnil/MQTTKit.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/techery/MQTTKit.git", :tag => "#{s.version}" }
 
   s.source_files  = 'libmosquitto/*.{h,c}', 'MQTTKit/*.{h,m}'
   s.public_header_files = 'MQTTKit/MQTTKit.h'
 
   s.requires_arc = true
 
-  s.dependency 'OpenSSL-Universal', '~> 1.0'
 
 end
