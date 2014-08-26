@@ -9,6 +9,7 @@
 
 #import "MQTTKit.h"
 #import "mosquitto.h"
+#include "mosquitto_internal.h"
 
 #if 0 // set to 1 to enable logs
 
@@ -230,6 +231,18 @@ static void on_unsubscribe(struct mosquitto *mosq, void *obj, int message_id)
 
     mosquitto_connect(mosq, cstrHost, self.port, self.keepAlive);
     
+    CFReadStreamRef readStream;
+    CFWriteStreamRef writeStream;
+    
+    CFStreamCreatePairWithSocket(kCFAllocatorDefault, mosq->sock, &readStream, &writeStream);
+    
+    if(readStream && writeStream)
+    {
+        CFReadStreamSetProperty(readStream, kCFStreamNetworkServiceType, kCFStreamNetworkServiceTypeVoIP);
+        CFWriteStreamSetProperty(writeStream, kCFStreamNetworkServiceType, kCFStreamNetworkServiceTypeVoIP);
+    }
+    
+ 
     dispatch_async(queue, ^{
         LogDebug(@"start mosquitto loop");
         mosquitto_loop_forever(mosq, 10, 1);
