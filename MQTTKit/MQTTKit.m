@@ -236,13 +236,29 @@ static void on_unsubscribe(struct mosquitto *mosq, void *obj, int message_id)
     
     CFStreamCreatePairWithSocket(kCFAllocatorDefault, mosq->sock, &readStream, &writeStream);
     
+    NSInputStream *networkStreamIn;
+    NSOutputStream *networkStreamOut;
+    networkStreamIn = (__bridge NSInputStream *) readStream;
+    networkStreamOut = (__bridge NSOutputStream *) writeStream;
+    
+    networkStreamIn.delegate = (id)self;
+    networkStreamOut.delegate = (id)self;
+
     if(readStream && writeStream)
     {
         CFReadStreamSetProperty(readStream, kCFStreamNetworkServiceType, kCFStreamNetworkServiceTypeVoIP);
         CFWriteStreamSetProperty(writeStream, kCFStreamNetworkServiceType, kCFStreamNetworkServiceTypeVoIP);
     }
     
- 
+    [networkStreamIn scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    
+    [networkStreamIn open];
+    [networkStreamOut open];
+    
+    //releasers
+    CFRelease(readStream);
+    CFRelease(writeStream);
+
     dispatch_async(queue, ^{
         LogDebug(@"start mosquitto loop");
         mosquitto_loop_forever(mosq, 10, 1);
